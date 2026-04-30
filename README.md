@@ -90,12 +90,12 @@ The app will be available at `http://localhost:5173` and supports hot module rep
 1. Go to `http://localhost:5173`
 2. No login needed—you're ready to practice immediately!
 3. Select your duration mode (1min, 2min, 3min, or 5min)
-4. Click "Get Random Prompt" to begin
+4. Click "Get Random Prompt" or choose from the prompt library to begin
 
 ### Speaking Practice Flow
 
 1. **Select Duration Mode**: Choose between 1min, 2min, 3min, or 5min practice sessions
-2. **Get Random Prompt**: Click to receive a random speaking prompt
+2. **Get Random Prompt or Browse the Library**: Click to receive a random speaking prompt or choose one of the seeded prompts
 3. **Thinking Phase**:
    - Press "Start Thinking" to begin thinking timer
    - Timer counts up showing your thinking time
@@ -186,11 +186,12 @@ Each dimension is scored 1-5, with feedback explaining strengths and areas to im
 - `category` - Category (personal, hypothetical, instructions, storytelling, persuasion, learning, opinion)
 - `created_at` - Timestamp
 
-20 prompts pre-seeded on first run across all categories.
+60 prompts pre-seeded on first run across all categories.
 
 ## Features Implemented
 
-✅ Random prompt generation from 20 seeded prompts
+✅ Random prompt generation from an expanded seeded prompt library
+✅ Browseable prompt library in the idle screen
 ✅ Dual timer system (thinking + speaking)
 ✅ Timer pause/resume functionality
 ✅ Audio recording with MediaRecorder API (WebM format)

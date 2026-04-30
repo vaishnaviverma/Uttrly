@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { promptAPI, evaluationAPI } from '../api/client';
 import { useAudioRecorder } from '../hooks/useAudioRecorder';
 import { useSpeechTranscription } from '../hooks/useSpeechTranscription';
@@ -28,6 +28,12 @@ export const SpeakingPractice = () => {
   const [timerMode, setTimerMode] = useState<'1min' | '2min' | '3min' | '5min'>('2min');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [libraryError, setLibraryError] = useState('');
+  const [allPrompts, setAllPrompts] = useState<Prompt[]>([]);
+  const [allPromptsLoading, setAllPromptsLoading] = useState(false);
+  const [selectedPromptId, setSelectedPromptId] = useState<number | null>(null);
+  const [promptSearch, setPromptSearch] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('all');
   const [transcriptionEnabled, setTranscriptionEnabled] = useState(true);
   const [starScores, setStarScores] = useState<StarScores | null>(null);
   const [starFeedback, setStarFeedback] = useState('');
@@ -60,13 +66,60 @@ export const SpeakingPractice = () => {
     clearTranscript,
   } = useSpeechTranscription();
 
+  useEffect(() => {
+    const loadPrompts = async () => {
+      setAllPromptsLoading(true);
+      setLibraryError('');
+
+      try {
+        const { data } = await promptAPI.getAllPrompts();
+        setAllPrompts(data);
+      } catch {
+        setLibraryError('Failed to load the prompt library. You can still use a random prompt.');
+      } finally {
+        setAllPromptsLoading(false);
+      }
+    };
+
+    void loadPrompts();
+  }, []);
+
   const displayError = error || transcriptionError;
   const liveTranscript = [transcript, interimTranscript].filter(Boolean).join(' ').trim();
+  const categories = ['all', ...Array.from(new Set(allPrompts.map((item) => item.category))).sort()];
+  const filteredPrompts = allPrompts.filter((item) => {
+    const matchesCategory = selectedCategory === 'all' || item.category === selectedCategory;
+    const matchesSearch = promptSearch.trim().length === 0 || item.text.toLowerCase().includes(promptSearch.trim().toLowerCase());
+
+    return matchesCategory && matchesSearch;
+  });
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const resetPracticeState = () => {
+    clearTranscript();
+    clearRecording();
+    stopListening();
+    setError('');
+    setStarScores(null);
+    setStarFeedback('');
+    setStarLoading(false);
+    setStarError('');
+  };
+
+  const beginPractice = (selectedPrompt: Prompt) => {
+    resetPracticeState();
+    setSelectedPromptId(selectedPrompt.id);
+    setPrompt(selectedPrompt);
+    setPhase('thinking');
+    thinkTimer.reset();
+    speakTimer.reset();
+    setSpeakDuration(0);
+    setThinkDuration(0);
   };
 
   const evaluateTranscript = async (capturedTranscript: string) => {
@@ -91,27 +144,21 @@ export const SpeakingPractice = () => {
   const fetchRandomPrompt = async () => {
     setLoading(true);
     setError('');
-    clearTranscript();
-    clearRecording();
-    stopListening();
-    setStarScores(null);
-    setStarFeedback('');
-    setStarLoading(false);
-    setStarError('');
+    resetPracticeState();
+    setSelectedPromptId(null);
 
     try {
       const { data } = await promptAPI.getRandomPrompt();
-      setPrompt(data);
-      setPhase('thinking');
-      thinkTimer.reset();
-      speakTimer.reset();
-      setSpeakDuration(0);
-      setThinkDuration(0);
+      beginPractice(data);
     } catch {
       setError('Failed to fetch prompt. Please try again.');
     } finally {
       setLoading(false);
     }
+  };
+
+  const startPracticeWithPrompt = (selectedPrompt: Prompt) => {
+    beginPractice(selectedPrompt);
   };
 
   const startThinking = () => {
@@ -153,12 +200,18 @@ export const SpeakingPractice = () => {
     setSpeakDuration(finalSpeakTime);
     setPhase('reviewing');
 
-    if (transcriptionEnabled && capturedTranscript.trim().length > 0) {
+    if (transcriptionEnabled && transcriptionSupported && capturedTranscript.trim().length > 0) {
       void evaluateTranscript(capturedTranscript);
+    } else if (transcriptionEnabled && !transcriptionSupported) {
+      setStarError('Live transcription is not supported in this browser.');
     } else if (!transcriptionEnabled) {
       setStarScores(null);
       setStarFeedback('');
       setStarError('Transcription was disabled for this session.');
+    } else {
+      setStarScores(null);
+      setStarFeedback('');
+      setStarError('No transcript was captured for this session.');
     }
   };
 
@@ -196,6 +249,64 @@ export const SpeakingPractice = () => {
             <button onClick={fetchRandomPrompt} disabled={loading} className="primary-btn start-btn">
               {loading ? 'Loading...' : 'Get Random Prompt'}
             </button>
+
+            <div className="library-section">
+              <div className="library-header">
+                <div>
+                  <h3>Prompt Library</h3>
+                  <p>Browse the expanded set and jump straight into practice.</p>
+                </div>
+                <span className="library-count">{filteredPrompts.length} prompts</span>
+              </div>
+
+              <div className="library-filters">
+                <input
+                  className="library-search"
+                  type="search"
+                  placeholder="Search prompts"
+                  value={promptSearch}
+                  onChange={(event) => setPromptSearch(event.target.value)}
+                />
+
+                <div className="category-pills" role="tablist" aria-label="Prompt categories">
+                  {categories.map((category) => (
+                    <button
+                      key={category}
+                      type="button"
+                      className={`category-pill ${selectedCategory === category ? 'active' : ''}`}
+                      onClick={() => setSelectedCategory(category)}
+                    >
+                      {category === 'all' ? 'All' : category}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {allPromptsLoading ? (
+                <div className="library-loading">Loading prompts...</div>
+              ) : libraryError ? (
+                <div className="error">{libraryError}</div>
+              ) : filteredPrompts.length === 0 ? (
+                <div className="library-empty">No prompts match your search.</div>
+              ) : (
+                <div className="lib-grid">
+                  {filteredPrompts.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      className={`lib-card ${selectedPromptId === item.id ? 'selected' : ''}`}
+                      onClick={() => startPracticeWithPrompt(item)}
+                    >
+                      <div className="lib-card-header">
+                        <span className="lib-card-category">{item.category}</span>
+                        <span className="lib-card-action">Start</span>
+                      </div>
+                      <div className="lib-card-text">{item.text}</div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -402,13 +513,8 @@ export const SpeakingPractice = () => {
                 onClick={() => {
                   setPhase('idle');
                   setPrompt(null);
-                  clearRecording();
-                  clearTranscript();
-                  stopListening();
-                  setStarScores(null);
-                  setStarFeedback('');
-                  setStarLoading(false);
-                  setStarError('');
+                  setSelectedPromptId(null);
+                  resetPracticeState();
                 }}
                 className="secondary-btn"
               >
