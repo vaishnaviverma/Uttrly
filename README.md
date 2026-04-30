@@ -121,7 +121,7 @@ The app will be available at `http://localhost:5173` and supports hot module rep
 - `GET /api/prompts` - Get all prompts
 
 ### Evaluation (STAR Format)
-- `POST /api/evaluate` - Evaluate transcript using STAR format (requires local LLM)
+- `POST /api/evaluate` - Evaluate transcript using STAR format (uses local LLM when configured, otherwise falls back to an offline heuristic)
   - Request: `{ "transcript": "string" }`
   - Response: `{ "scores": { "situation": 1-5, "task": 1-5, "action": 1-5, "result": 1-5 }, "feedback": "string" }`
 
@@ -242,7 +242,7 @@ If port 3001 or 5173 is already in use:
 
 ### Database Lock Error
 - Make sure only one backend instance is running
-- Database file is at `/backend/speaking_practice.db`
+- Database file is at `/backend/db/speaking_practice.db`
 
 ### CORS Errors
 - Verify both servers are running
