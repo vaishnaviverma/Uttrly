@@ -13,6 +13,13 @@ interface Prompt {
   category: string;
 }
 
+interface StarScores {
+  situation: number;
+  task: number;
+  action: number;
+  result: number;
+}
+
 export const SpeakingPractice = () => {
   const [phase, setPhase] = useState<PracticePhase>('idle');
   const [prompt, setPrompt] = useState<Prompt | null>(null);
@@ -22,12 +29,7 @@ export const SpeakingPractice = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [transcriptionEnabled, setTranscriptionEnabled] = useState(true);
-  const [starScores, setStarScores] = useState<{
-    situation: number;
-    task: number;
-    action: number;
-    result: number;
-  } | null>(null);
+  const [starScores, setStarScores] = useState<StarScores | null>(null);
   const [starFeedback, setStarFeedback] = useState('');
   const [starLoading, setStarLoading] = useState(false);
   const [starError, setStarError] = useState('');
@@ -79,8 +81,7 @@ export const SpeakingPractice = () => {
       setStarFeedback(data.feedback);
     } catch (err: any) {
       setStarError(
-        err?.response?.data?.error ||
-        'Failed to evaluate response. Make sure the LLM server is running.'
+        err?.response?.data?.error || 'Failed to evaluate response. Make sure the LLM server is running.'
       );
     } finally {
       setStarLoading(false);
@@ -123,14 +124,6 @@ export const SpeakingPractice = () => {
     thinkTimer.pause();
   };
 
-  const moveToSpeaking = () => {
-    const finalThinkTime = thinkTimer.time;
-    thinkTimer.stop();
-    setThinkDuration(finalThinkTime);
-    setPhase('speaking');
-    startSpeaking();
-  };
-
   const startSpeaking = async () => {
     clearTranscript();
     await startRecording();
@@ -138,6 +131,16 @@ export const SpeakingPractice = () => {
     if (transcriptionSupported && transcriptionEnabled) {
       startListening();
     }
+
+    speakTimer.start();
+  };
+
+  const moveToSpeaking = () => {
+    const finalThinkTime = thinkTimer.time;
+    thinkTimer.stop();
+    setThinkDuration(finalThinkTime);
+    setPhase('speaking');
+    void startSpeaking();
   };
 
   const finishSpeaking = () => {
@@ -156,26 +159,6 @@ export const SpeakingPractice = () => {
       setStarScores(null);
       setStarFeedback('');
       setStarError('Transcription was disabled for this session.');
-    }
-  };
-
-  const evaluateTranscript = async (capturedTranscript: string) => {
-    setStarLoading(true);
-    setStarError('');
-    setStarScores(null);
-    setStarFeedback('');
-
-    try {
-      const { data } = await evaluationAPI.evaluateTranscript(capturedTranscript);
-      setStarScores(data.scores);
-      setStarFeedback(data.feedback);
-    } catch (err: any) {
-      setStarError(
-        err?.response?.data?.error ||
-        'Failed to evaluate response. Make sure the LLM server is running.'
-      );
-    } finally {
-      setStarLoading(false);
     }
   };
 
@@ -210,11 +193,7 @@ export const SpeakingPractice = () => {
 
             {displayError && <div className="error">{displayError}</div>}
 
-            <button
-              onClick={fetchRandomPrompt}
-              disabled={loading}
-              className="primary-btn start-btn"
-            >
+            <button onClick={fetchRandomPrompt} disabled={loading} className="primary-btn start-btn">
               {loading ? 'Loading...' : 'Get Random Prompt'}
             </button>
           </div>
@@ -242,11 +221,7 @@ export const SpeakingPractice = () => {
                   </button>
                 )}
               </div>
-              <button
-                onClick={moveToSpeaking}
-                disabled={thinkTimer.time === 0}
-                className="success-btn"
-              >
+              <button onClick={moveToSpeaking} disabled={thinkTimer.time === 0} className="success-btn">
                 Ready to Speak →
               </button>
             </div>
@@ -259,38 +234,21 @@ export const SpeakingPractice = () => {
               <p className="prompt-text">{prompt.text}</p>
             </div>
 
+            <div className="recording-indicator">
               {isRecording && (
                 <div className="recording-pulse">
                   <span className="pulse"></span>
                   Recording... {formatTime(recordingTime)}
                 </div>
               )}
-                if (transcriptionEnabled && capturedTranscript.trim().length > 0) {
-                  void evaluateTranscript(capturedTranscript);
-                } else if (!transcriptionEnabled) {
-                  setStarScores(null);
-                  setStarFeedback('');
-                  setStarError('Transcription was disabled for this session.');
-                }
-              };
+            </div>
 
-              const finishSpeaking = () => {
-                const capturedTranscript = liveTranscript;
-                stopListening();
-                stopRecording();
-
-                const finalSpeakTime = speakTimer.time;
-                speakTimer.stop();
-                setSpeakDuration(finalSpeakTime);
-                setPhase('reviewing');
-
-                if (transcriptionEnabled && capturedTranscript.trim().length > 0) {
-                  void evaluateTranscript(capturedTranscript);
-                } else if (!transcriptionEnabled) {
-                  setStarScores(null);
-                  setStarFeedback('');
-                  setStarError('Transcription was disabled for this session.');
-                }
+            <div className="transcript-card">
+              <div className="transcript-header">
+                <h3>Live Transcript</h3>
+                <div className="transcript-controls">
+                  <button
+                    onClick={() => setTranscriptionEnabled(!transcriptionEnabled)}
                     className={`toggle-btn ${transcriptionEnabled ? 'enabled' : 'disabled'}`}
                     title={transcriptionEnabled ? 'Disable transcription' : 'Enable transcription'}
                   >
@@ -303,22 +261,19 @@ export const SpeakingPractice = () => {
               </div>
               {transcriptionSupported ? (
                 <p className="transcript-text">
-                  {transcriptionEnabled ? (liveTranscript || 'Start speaking to see live transcription.') : 'Transcription is disabled. Click the toggle to enable.'}
+                  {transcriptionEnabled
+                    ? liveTranscript || 'Start speaking to see live transcription.'
+                    : 'Transcription is disabled. Click the toggle to enable.'}
                 </p>
               ) : (
-                <p className="transcript-text muted">
-                  Live speech recognition is not supported in this browser.
-                </p>
+                <p className="transcript-text muted">Live speech recognition is not supported in this browser.</p>
               )}
             </div>
 
             <div className="timer-section">
               <h3>Speaking Time</h3>
               <div className="timer-display">{formatTime(speakTimer.time)}</div>
-              <button
-                onClick={finishSpeaking}
-                className="danger-btn"
-              >
+              <button onClick={finishSpeaking} className="danger-btn">
                 Stop Speaking
               </button>
             </div>
@@ -352,7 +307,9 @@ export const SpeakingPractice = () => {
                 </div>
               </div>
               <p className="transcript-text">
-                {transcriptionEnabled ? (liveTranscript || 'No transcript captured.') : 'Transcription was disabled for this session.'}
+                {transcriptionEnabled
+                  ? liveTranscript || 'No transcript captured.'
+                  : 'Transcription was disabled for this session.'}
               </p>
             </div>
 
@@ -377,40 +334,28 @@ export const SpeakingPractice = () => {
                         <div className="score-label">Situation</div>
                         <div className="score-value">{starScores.situation}/5</div>
                         <div className="score-bar">
-                          <div
-                            className="score-fill"
-                            style={{ width: `${(starScores.situation / 5) * 100}%` }}
-                          ></div>
+                          <div className="score-fill" style={{ width: `${(starScores.situation / 5) * 100}%` }}></div>
                         </div>
                       </div>
                       <div className="star-score-item">
                         <div className="score-label">Task</div>
                         <div className="score-value">{starScores.task}/5</div>
                         <div className="score-bar">
-                          <div
-                            className="score-fill"
-                            style={{ width: `${(starScores.task / 5) * 100}%` }}
-                          ></div>
+                          <div className="score-fill" style={{ width: `${(starScores.task / 5) * 100}%` }}></div>
                         </div>
                       </div>
                       <div className="star-score-item">
                         <div className="score-label">Action</div>
                         <div className="score-value">{starScores.action}/5</div>
                         <div className="score-bar">
-                          <div
-                            className="score-fill"
-                            style={{ width: `${(starScores.action / 5) * 100}%` }}
-                          ></div>
+                          <div className="score-fill" style={{ width: `${(starScores.action / 5) * 100}%` }}></div>
                         </div>
                       </div>
                       <div className="star-score-item">
                         <div className="score-label">Result</div>
                         <div className="score-value">{starScores.result}/5</div>
                         <div className="score-bar">
-                          <div
-                            className="score-fill"
-                            style={{ width: `${(starScores.result / 5) * 100}%` }}
-                          ></div>
+                          <div className="score-fill" style={{ width: `${(starScores.result / 5) * 100}%` }}></div>
                         </div>
                       </div>
                     </div>
@@ -460,6 +405,10 @@ export const SpeakingPractice = () => {
                   clearRecording();
                   clearTranscript();
                   stopListening();
+                  setStarScores(null);
+                  setStarFeedback('');
+                  setStarLoading(false);
+                  setStarError('');
                 }}
                 className="secondary-btn"
               >

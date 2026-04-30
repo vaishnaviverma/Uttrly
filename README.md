@@ -1,6 +1,6 @@
 # Uttrly 
 
-A minimal, distraction-free web app to practice speaking with random prompts, built-in timers, and live browser transcription. No sign-ups, no saving—just speak.
+A minimal, distraction-free web app to practice speaking with random prompts, built-in timers, live browser transcription, and STAR analysis against your responses. No sign-ups, no saving—just speak.
 
 ## Tech Stack
 
@@ -127,7 +127,7 @@ The app will be available at `http://localhost:5173` and supports hot module rep
 
 ## STAR Evaluation Setup
 
-The app supports AI-powered STAR format evaluation of your responses. This requires a local LLM server running on your machine.
+The app supports AI-powered STAR format evaluation of your responses. It runs locally with `llama-cli` when a model path is configured, and falls back to a simple offline heuristic when it is not.
 
 ### Prerequisites
 - Homebrew (on macOS): `brew install llama.cpp`
@@ -147,14 +147,12 @@ cd ~/models  # or your preferred directory
 wget https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.2-GGUF/resolve/main/mistral-7b-instruct-v0.2.Q4_K_M.gguf
 ```
 
-3. **Start the llama.cpp server**:
+3. **Point Uttrly at the model** by setting `LLAMA_MODEL_PATH` in `backend/.env`:
 ```bash
-llama-server -m ~/models/mistral-7b-instruct-v0.2.Q4_K_M.gguf --port 8000
+LLAMA_MODEL_PATH=/Users/you/models/mistral-7b-instruct-v0.2.Q4_K_M.gguf
 ```
 
-Wait for the message `"listening on http://0.0.0.0:8000"` before starting the app.
-
-4. **Start Uttrly** (in separate terminal):
+4. **Start Uttrly** (in separate terminals):
 ```bash
 # In one terminal: backend
 cd backend && npm run dev
@@ -176,7 +174,7 @@ Each dimension is scored 1-5, with feedback explaining strengths and areas to im
 
 ### Troubleshooting
 
-- **"Cannot connect to LLM server"**: Make sure `llama-server` is running on port 8000
+- **No model configured**: Set `LLAMA_MODEL_PATH` in `backend/.env` to enable real local LLM scoring
 - **Slow evaluation**: Normal for first run; Q4_K_M quantization takes ~10-15s per eval on M-series Mac
 - **Out of memory**: If you have <8GB RAM, try `Q3_K_S` quantization instead (smaller, faster)
 
@@ -198,6 +196,7 @@ Each dimension is scored 1-5, with feedback explaining strengths and areas to im
 ✅ Audio recording with MediaRecorder API (WebM format)
 ✅ Audio playback with progress tracking
 ✅ Live browser transcription in supported browsers
+✅ STAR analysis of your responses with 1-5 scoring for Situation, Task, Action, and Result
 ✅ Multiple duration modes (1min, 2min, 3min, 5min)
 ✅ Responsive design (mobile + desktop)
 ✅ Beautiful gradient UI with smooth animations
@@ -220,6 +219,7 @@ Each dimension is scored 1-5, with feedback explaining strengths and areas to im
 ```
 PORT=3001
 NODE_ENV=development
+LLAMA_MODEL_PATH=/Users/you/models/mistral-7b-instruct-v0.2.Q4_K_M.gguf
 ```
 
 ### Frontend (.env.development)

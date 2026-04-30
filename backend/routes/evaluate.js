@@ -1,7 +1,11 @@
 const express = require('express');
+const { promisify } = require('util');
+const { execFile } = require('child_process');
 const router = express.Router();
 
-const LLM_SERVER_URL = process.env.LLM_SERVER_URL || 'http://localhost:8000';
+const execFileAsync = promisify(execFile);
+const LLAMA_CLI_PATH = process.env.LLAMA_CLI_PATH || 'llama-cli';
+const LLAMA_MODEL_PATH = process.env.LLAMA_MODEL_PATH;
 const EVALUATION_PROMPT = `You are an expert interviewer evaluating a candidate's response using the STAR method (Situation, Task, Action, Result).
 
 Given a transcript of someone's speaking practice response, score their answer on each dimension from 1-5:
@@ -24,6 +28,87 @@ Respond with valid JSON in this exact format (no markdown, no code blocks, pure 
 Transcript to evaluate:
 `;
 
+const extractJsonFromText = (text) => {
+  const firstBrace = text.indexOf('{');
+  const lastBrace = text.lastIndexOf('}');
+
+  if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
+    return null;
+  }
+
+  return text.slice(firstBrace, lastBrace + 1);
+};
+
+const normalizeEvaluation = (evaluation) => {
+  if (
+    !evaluation ||
+    typeof evaluation !== 'object' ||
+    !evaluation.scores ||
+    typeof evaluation.scores.situation !== 'number' ||
+    typeof evaluation.scores.task !== 'number' ||
+    typeof evaluation.scores.action !== 'number' ||
+    typeof evaluation.scores.result !== 'number' ||
+    typeof evaluation.feedback !== 'string'
+  ) {
+    return null;
+  }
+
+  const validateScore = (score) => Math.max(1, Math.min(5, Math.round(score)));
+
+  return {
+    scores: {
+      situation: validateScore(evaluation.scores.situation),
+      task: validateScore(evaluation.scores.task),
+      action: validateScore(evaluation.scores.action),
+      result: validateScore(evaluation.scores.result),
+    },
+    feedback: evaluation.feedback.trim(),
+  };
+};
+
+const evaluateWithHeuristics = (transcript) => {
+  const wordCount = transcript.trim().split(/\s+/).filter(Boolean).length;
+  const hasContext = /\b(when|during|while|at my|in my|context|situation)\b/i.test(transcript);
+  const hasTask = /\b(goal|task|needed to|responsible for|challenge|objective)\b/i.test(transcript);
+  const hasAction = /\b(i (?:did|implemented|built|created|analyzed|designed|communicated|led|managed|improved|solved|handled)|we (?:did|implemented|built|created|analyzed|designed|communicated|led|managed|improved|solved|handled))\b/i.test(transcript);
+  const hasResult = /\b(result|outcome|impact|improved|increased|reduced|saved|achieved|led to|therefore|because of that|%|percent)\b/i.test(transcript);
+  const hasNumbers = /\b\d+(?:\.\d+)?%?\b/.test(transcript);
+
+  const clampScore = (score) => Math.max(1, Math.min(5, score));
+
+  const scores = {
+    situation: clampScore((hasContext ? 3 : 1) + (wordCount > 80 ? 1 : 0) + (wordCount > 140 ? 1 : 0)),
+    task: clampScore((hasTask ? 3 : 1) + (wordCount > 70 ? 1 : 0)),
+    action: clampScore((hasAction ? 3 : 1) + (wordCount > 90 ? 1 : 0) + (wordCount > 160 ? 1 : 0)),
+    result: clampScore((hasResult ? 3 : 1) + (hasNumbers ? 1 : 0) + (wordCount > 100 ? 1 : 0)),
+  };
+
+  const feedbackParts = [];
+
+  if (!hasContext) {
+    feedbackParts.push('Add a clearer situation or context so the listener knows what was happening.');
+  }
+  if (!hasTask) {
+    feedbackParts.push('State the goal or challenge more explicitly.');
+  }
+  if (!hasAction) {
+    feedbackParts.push('Describe your actions in more concrete detail.');
+  }
+  if (!hasResult) {
+    feedbackParts.push('Close with the outcome or impact, ideally with numbers when possible.');
+  }
+
+  const feedback = feedbackParts.length > 0
+    ? feedbackParts.join(' ')
+    : 'Strong STAR structure overall. Keep the response concise while preserving the context, your actions, and the result.';
+
+  return {
+    scores,
+    feedback,
+    source: 'heuristic',
+  };
+};
+
 router.post('/', async (req, res) => {
   try {
     const { transcript } = req.body;
@@ -36,74 +121,71 @@ router.post('/', async (req, res) => {
 
     const prompt = EVALUATION_PROMPT + transcript;
 
-    let evalResponse;
+    if (!LLAMA_MODEL_PATH) {
+      return res.json(evaluateWithHeuristics(transcript));
+    }
+
+    let stdout;
     try {
-      evalResponse = await fetch(`${LLM_SERVER_URL}/api/generate`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'mistral',
+      const result = await execFileAsync(
+        LLAMA_CLI_PATH,
+        [
+          '-m',
+          LLAMA_MODEL_PATH,
+          '-p',
           prompt,
-          stream: false,
-          temperature: 0.7,
-          top_p: 0.9,
-          stop: ['</s>', '\n\n'],
-        }),
-        signal: AbortSignal.timeout(60000), // 60s timeout
-      });
-    } catch (fetchError) {
-      if (fetchError.name === 'AbortError') {
-        return res.status(504).json({
-          error: 'LLM evaluation timed out. The local model may be slow or unresponsive.',
-        });
+          '-n',
+          '256',
+          '--temp',
+          '0.2',
+          '--top-p',
+          '0.9',
+          '--log-disable',
+          '--no-display-prompt',
+        ],
+        {
+          timeout: 60000,
+          maxBuffer: 1024 * 1024,
+        }
+      );
+
+      stdout = result.stdout || '';
+    } catch (cliError) {
+      if (cliError.killed || cliError.signal === 'SIGTERM') {
+        return res.json(evaluateWithHeuristics(transcript));
       }
-      return res.status(503).json({
-        error: `Cannot connect to LLM server at ${LLM_SERVER_URL}. Make sure llama.cpp is running. Start with: llama-server -m <model_path> --port 8000`,
-      });
+
+      if (cliError.code === 'ENOENT') {
+        return res.json(evaluateWithHeuristics(transcript));
+      }
+
+      return res.json(evaluateWithHeuristics(transcript));
     }
 
-    if (!evalResponse.ok) {
-      return res.status(503).json({
-        error: `LLM server error: ${evalResponse.statusText}`,
-      });
-    }
-
-    const data = await evalResponse.json();
-    const generatedText = data.response || '';
-
-    // Extract JSON from response (handles both pure JSON and JSON inside markdown)
-    let jsonMatch = generatedText.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
+    const jsonText = extractJsonFromText(stdout);
+    if (!jsonText) {
       return res.status(500).json({
         error: 'Failed to parse LLM response. Model returned invalid format.',
-        debug: generatedText.substring(0, 200),
+        debug: stdout.substring(0, 200),
       });
     }
 
-    const evaluation = JSON.parse(jsonMatch[0]);
+    let parsedEvaluation;
+    try {
+      parsedEvaluation = JSON.parse(jsonText);
+    } catch (parseError) {
+      return res.status(500).json({
+        error: 'Failed to parse LLM response as JSON.',
+        debug: jsonText.substring(0, 200),
+      });
+    }
 
-    // Validate structure
-    if (
-      !evaluation.scores ||
-      typeof evaluation.scores.situation !== 'number' ||
-      typeof evaluation.scores.task !== 'number' ||
-      typeof evaluation.scores.action !== 'number' ||
-      typeof evaluation.scores.result !== 'number' ||
-      typeof evaluation.feedback !== 'string'
-    ) {
+    const evaluation = normalizeEvaluation(parsedEvaluation);
+    if (!evaluation) {
       return res.status(500).json({
         error: 'Invalid evaluation structure from LLM.',
       });
     }
-
-    // Ensure scores are in valid range
-    const validateScore = (s) => Math.max(1, Math.min(5, Math.round(s)));
-    evaluation.scores.situation = validateScore(evaluation.scores.situation);
-    evaluation.scores.task = validateScore(evaluation.scores.task);
-    evaluation.scores.action = validateScore(evaluation.scores.action);
-    evaluation.scores.result = validateScore(evaluation.scores.result);
 
     res.json(evaluation);
   } catch (err) {
