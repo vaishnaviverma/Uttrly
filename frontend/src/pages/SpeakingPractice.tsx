@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { useTimer } from '../hooks/useTimer';
+import { promptAPI } from '../api/client';
 import { useAudioRecorder } from '../hooks/useAudioRecorder';
-import { promptAPI, sessionAPI } from '../api/client';
+import { useSpeechTranscription } from '../hooks/useSpeechTranscription';
+import { useTimer } from '../hooks/useTimer';
 import '../styles/SpeakingPractice.css';
 
 type PracticePhase = 'idle' | 'thinking' | 'speaking' | 'reviewing';
@@ -20,7 +21,6 @@ export const SpeakingPractice = () => {
   const [timerMode, setTimerMode] = useState<'1min' | '2min' | '3min' | '5min'>('2min');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [successMessage, setSuccessMessage] = useState('');
 
   const thinkTimer = useTimer();
   const speakTimer = useTimer();
@@ -37,20 +37,33 @@ export const SpeakingPractice = () => {
     playbackDuration,
     clearRecording,
   } = useAudioRecorder();
+  const {
+    transcript,
+    interimTranscript,
+    isSupported: transcriptionSupported,
+    isListening,
+    error: transcriptionError,
+    startListening,
+    stopListening,
+    clearTranscript,
+  } = useSpeechTranscription();
 
-  const getTimerConfig = () => {
-    switch (timerMode) {
-      case '1min': return { think: 60, speak: 60 };
-      case '2min': return { think: 120, speak: 120 };
-      case '3min': return { think: 180, speak: 180 };
-      case '5min': return { think: 300, speak: 300 };
-      default: return { think: 120, speak: 120 };
-    }
+  const displayError = error || transcriptionError;
+  const liveTranscript = [transcript, interimTranscript].filter(Boolean).join(' ').trim();
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
   const fetchRandomPrompt = async () => {
     setLoading(true);
     setError('');
+    clearTranscript();
+    clearRecording();
+    stopListening();
+
     try {
       const { data } = await promptAPI.getRandomPrompt();
       setPrompt(data);
@@ -59,8 +72,7 @@ export const SpeakingPractice = () => {
       speakTimer.reset();
       setSpeakDuration(0);
       setThinkDuration(0);
-      clearRecording();
-    } catch (err: any) {
+    } catch {
       setError('Failed to fetch prompt. Please try again.');
     } finally {
       setLoading(false);
@@ -77,33 +89,33 @@ export const SpeakingPractice = () => {
     thinkTimer.pause();
   };
 
-  const resumeThinking = () => {
-    thinkTimer.resume();
-  };
-
   const moveToSpeaking = () => {
+    const finalThinkTime = thinkTimer.time;
     thinkTimer.stop();
-    setThinkDuration(thinkTimer.time);
+    setThinkDuration(finalThinkTime);
     setPhase('speaking');
     startSpeaking();
   };
 
   const startSpeaking = async () => {
+    clearTranscript();
     await startRecording();
+
+    if (transcriptionSupported) {
+      startListening();
+    }
+
     speakTimer.start();
   };
 
   const finishSpeaking = () => {
+    stopListening();
     stopRecording();
-    speakTimer.stop();
-    setSpeakDuration(speakTimer.time);
-    setPhase('reviewing');
-  };
 
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
+    const finalSpeakTime = speakTimer.time;
+    speakTimer.stop();
+    setSpeakDuration(finalSpeakTime);
+    setPhase('reviewing');
   };
 
   return (
@@ -117,7 +129,7 @@ export const SpeakingPractice = () => {
           <div className="idle-section">
             <h2>Ready to practice?</h2>
             <p>Select your practice duration and start speaking!</p>
-            
+
             <div className="timer-config">
               <label>Duration Mode:</label>
               <div className="radio-group">
@@ -135,8 +147,7 @@ export const SpeakingPractice = () => {
               </div>
             </div>
 
-            {error && <div className="error">{error}</div>}
-            {successMessage && <div className="success">{successMessage}</div>}
+            {displayError && <div className="error">{displayError}</div>}
 
             <button
               onClick={fetchRandomPrompt}
@@ -191,8 +202,26 @@ export const SpeakingPractice = () => {
               {isRecording && (
                 <div className="recording-pulse">
                   <span className="pulse"></span>
-                  Recording...
+                  Recording... {formatTime(recordingTime)}
                 </div>
+              )}
+            </div>
+
+            <div className="transcript-card">
+              <div className="transcript-header">
+                <h3>Live Transcript</h3>
+                <span className={transcriptionSupported ? 'supported' : 'unsupported'}>
+                  {transcriptionSupported ? (isListening ? 'Listening' : 'Waiting') : 'Not supported'}
+                </span>
+              </div>
+              {transcriptionSupported ? (
+                <p className="transcript-text">
+                  {liveTranscript || 'Start speaking to see live transcription.'}
+                </p>
+              ) : (
+                <p className="transcript-text muted">
+                  Live speech recognition is not supported in this browser.
+                </p>
               )}
             </div>
 
@@ -212,7 +241,7 @@ export const SpeakingPractice = () => {
         {phase === 'reviewing' && prompt && (
           <div className="reviewing-section">
             <h2>Session Review</h2>
-            
+
             <div className="stats">
               <div className="stat">
                 <label>Thinking Duration:</label>
@@ -226,6 +255,16 @@ export const SpeakingPractice = () => {
                 <label>Prompt:</label>
                 <span>{prompt.text}</span>
               </div>
+            </div>
+
+            <div className="transcript-card">
+              <div className="transcript-header">
+                <h3>Transcript</h3>
+                <span className="supported">Final</span>
+              </div>
+              <p className="transcript-text">
+                {liveTranscript || 'No transcript captured.'}
+              </p>
             </div>
 
             {recordedBlob && (
@@ -262,6 +301,8 @@ export const SpeakingPractice = () => {
                   setPhase('idle');
                   setPrompt(null);
                   clearRecording();
+                  clearTranscript();
+                  stopListening();
                 }}
                 className="secondary-btn"
               >
@@ -269,7 +310,7 @@ export const SpeakingPractice = () => {
               </button>
             </div>
 
-            {error && <div className="error">{error}</div>}
+            {displayError && <div className="error">{displayError}</div>}
           </div>
         )}
       </div>

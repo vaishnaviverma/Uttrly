@@ -1,6 +1,6 @@
 # Uttrly - Daily Speaking Practice
 
-A minimal, distraction-free web app to practice speaking with random prompts and built-in timers. No sign-ups, no saving—just speak.
+A minimal, distraction-free web app to practice speaking with random prompts, built-in timers, and live browser transcription. No sign-ups, no saving—just speak.
 
 ## Tech Stack
 
@@ -8,6 +8,7 @@ A minimal, distraction-free web app to practice speaking with random prompts and
 - **Backend**: Node.js + Express
 - **Database**: SQLite (better-sqlite3)
 - **Audio Recording**: Browser Web Audio API (MediaRecorder) - for playback only
+- **Transcription**: Browser Speech Recognition API when supported
 
 ## Project Structure
 
@@ -103,10 +104,12 @@ The app will be available at `http://localhost:5173` and supports hot module rep
 4. **Speaking Phase**:
    - App requests microphone access
    - Starts recording automatically
+   - Starts live transcription automatically in supported browsers
    - Speaking timer counts up
    - Press "Stop Speaking" when done
 5. **Review Session**:
    - See total thinking and speaking durations
+   - Review the captured transcript
    - Play back your recording
    - Click "Start New Session" to practice again
    - Nothing is saved—it's just for your practice!
@@ -134,6 +137,7 @@ The app will be available at `http://localhost:5173` and supports hot module rep
 ✅ Timer pause/resume functionality
 ✅ Audio recording with MediaRecorder API (WebM format)
 ✅ Audio playback with progress tracking
+✅ Live browser transcription in supported browsers
 ✅ Multiple duration modes (1min, 2min, 3min, 5min)
 ✅ Responsive design (mobile + desktop)
 ✅ Beautiful gradient UI with smooth animations
