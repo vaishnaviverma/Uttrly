@@ -243,7 +243,6 @@ export const SpeakingPractice = () => {
               <div className="timer-display">{formatTime(speakTimer.time)}</div>
               <button
                 onClick={finishSpeaking}
-                disabled={!isRecording}
                 className="danger-btn"
               >
                 Stop Speaking
