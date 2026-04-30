@@ -1,4 +1,4 @@
-import { SpeakingPractice } from './pages/SpeakingPractice';
+import { SpeakingPractice } from './pages/SpeakingPractice.tsx';
 import './App.css';
 
 function App() {

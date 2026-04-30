@@ -23,7 +23,6 @@ export const useAudioRecorder = (): UseAudioRecorderReturn => {
   const [playbackDuration, setPlaybackDuration] = useState(0);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const recordingTimeIntervalRef = useRef<number | null>(null);
   const audioElementRef = useRef<HTMLAudioElement | null>(null);
