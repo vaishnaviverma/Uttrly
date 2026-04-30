@@ -19,4 +19,9 @@ export const sessionAPI = {
   deleteSession: (id: string) => apiClient.delete(`/sessions/${id}`),
 };
 
+export const evaluationAPI = {
+  evaluateTranscript: (transcript: string) =>
+    apiClient.post('/evaluate', { transcript }),
+};
+
 export default apiClient;

@@ -1,4 +1,4 @@
-# Uttrly - Daily Speaking Practice
+# Uttrly 
 
 A minimal, distraction-free web app to practice speaking with random prompts, built-in timers, and live browser transcription. No sign-ups, no saving—just speak.
 
@@ -119,6 +119,66 @@ The app will be available at `http://localhost:5173` and supports hot module rep
 ### Prompts
 - `GET /api/prompts/random` - Get random prompt
 - `GET /api/prompts` - Get all prompts
+
+### Evaluation (STAR Format)
+- `POST /api/evaluate` - Evaluate transcript using STAR format (requires local LLM)
+  - Request: `{ "transcript": "string" }`
+  - Response: `{ "scores": { "situation": 1-5, "task": 1-5, "action": 1-5, "result": 1-5 }, "feedback": "string" }`
+
+## STAR Evaluation Setup
+
+The app supports AI-powered STAR format evaluation of your responses. This requires a local LLM server running on your machine.
+
+### Prerequisites
+- Homebrew (on macOS): `brew install llama.cpp`
+- ~5-7GB free disk space for the Mistral-7B model
+- ~8GB RAM recommended
+
+### Installation & Setup
+
+1. **Install llama.cpp via Homebrew** (macOS):
+```bash
+brew install llama.cpp
+```
+
+2. **Download Mistral-7B-Instruct model** (quantized version ~4.8GB):
+```bash
+cd ~/models  # or your preferred directory
+wget https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.2-GGUF/resolve/main/mistral-7b-instruct-v0.2.Q4_K_M.gguf
+```
+
+3. **Start the llama.cpp server**:
+```bash
+llama-server -m ~/models/mistral-7b-instruct-v0.2.Q4_K_M.gguf --port 8000
+```
+
+Wait for the message `"listening on http://0.0.0.0:8000"` before starting the app.
+
+4. **Start Uttrly** (in separate terminal):
+```bash
+# In one terminal: backend
+cd backend && npm run dev
+
+# In another terminal: frontend
+cd frontend && npm run dev
+```
+
+5. Open `http://localhost:5173` and practice! After each response, STAR scores will be generated.
+
+### STAR Format Explanation
+
+- **Situation**: How well did you set the context? (clarity of scene/setup)
+- **Task**: How well did you define the challenge or goal?
+- **Action**: How well did you describe your approach/steps?
+- **Result**: How well did you explain the outcome/impact?
+
+Each dimension is scored 1-5, with feedback explaining strengths and areas to improve.
+
+### Troubleshooting
+
+- **"Cannot connect to LLM server"**: Make sure `llama-server` is running on port 8000
+- **Slow evaluation**: Normal for first run; Q4_K_M quantization takes ~10-15s per eval on M-series Mac
+- **Out of memory**: If you have <8GB RAM, try `Q3_K_S` quantization instead (smaller, faster)
 
 ## Database Schema
 

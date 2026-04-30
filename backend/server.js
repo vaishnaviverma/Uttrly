@@ -22,9 +22,11 @@ if (!fs.existsSync(uploadsDir)) {
 // Routes
 const promptRoutes = require('./routes/prompts');
 const sessionRoutes = require('./routes/sessions');
+const evaluateRoutes = require('./routes/evaluate');
 
 app.use('/api/prompts', promptRoutes);
 app.use('/api/sessions', sessionRoutes);
+app.use('/api/evaluate', evaluateRoutes);
 
 // Health check
 app.get('/health', (req, res) => {

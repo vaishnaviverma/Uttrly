@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { promptAPI } from '../api/client';
+import { promptAPI, evaluationAPI } from '../api/client';
 import { useAudioRecorder } from '../hooks/useAudioRecorder';
 import { useSpeechTranscription } from '../hooks/useSpeechTranscription';
 import { useTimer } from '../hooks/useTimer';
@@ -21,6 +21,16 @@ export const SpeakingPractice = () => {
   const [timerMode, setTimerMode] = useState<'1min' | '2min' | '3min' | '5min'>('2min');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [transcriptionEnabled, setTranscriptionEnabled] = useState(true);
+  const [starScores, setStarScores] = useState<{
+    situation: number;
+    task: number;
+    action: number;
+    result: number;
+  } | null>(null);
+  const [starFeedback, setStarFeedback] = useState('');
+  const [starLoading, setStarLoading] = useState(false);
+  const [starError, setStarError] = useState('');
 
   const thinkTimer = useTimer();
   const speakTimer = useTimer();
@@ -57,12 +67,36 @@ export const SpeakingPractice = () => {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
+  const evaluateTranscript = async (capturedTranscript: string) => {
+    setStarLoading(true);
+    setStarError('');
+    setStarScores(null);
+    setStarFeedback('');
+
+    try {
+      const { data } = await evaluationAPI.evaluateTranscript(capturedTranscript);
+      setStarScores(data.scores);
+      setStarFeedback(data.feedback);
+    } catch (err: any) {
+      setStarError(
+        err?.response?.data?.error ||
+        'Failed to evaluate response. Make sure the LLM server is running.'
+      );
+    } finally {
+      setStarLoading(false);
+    }
+  };
+
   const fetchRandomPrompt = async () => {
     setLoading(true);
     setError('');
     clearTranscript();
     clearRecording();
     stopListening();
+    setStarScores(null);
+    setStarFeedback('');
+    setStarLoading(false);
+    setStarError('');
 
     try {
       const { data } = await promptAPI.getRandomPrompt();
@@ -101,14 +135,13 @@ export const SpeakingPractice = () => {
     clearTranscript();
     await startRecording();
 
-    if (transcriptionSupported) {
+    if (transcriptionSupported && transcriptionEnabled) {
       startListening();
     }
-
-    speakTimer.start();
   };
 
   const finishSpeaking = () => {
+    const capturedTranscript = liveTranscript;
     stopListening();
     stopRecording();
 
@@ -116,6 +149,34 @@ export const SpeakingPractice = () => {
     speakTimer.stop();
     setSpeakDuration(finalSpeakTime);
     setPhase('reviewing');
+
+    if (transcriptionEnabled && capturedTranscript.trim().length > 0) {
+      void evaluateTranscript(capturedTranscript);
+    } else if (!transcriptionEnabled) {
+      setStarScores(null);
+      setStarFeedback('');
+      setStarError('Transcription was disabled for this session.');
+    }
+  };
+
+  const evaluateTranscript = async (capturedTranscript: string) => {
+    setStarLoading(true);
+    setStarError('');
+    setStarScores(null);
+    setStarFeedback('');
+
+    try {
+      const { data } = await evaluationAPI.evaluateTranscript(capturedTranscript);
+      setStarScores(data.scores);
+      setStarFeedback(data.feedback);
+    } catch (err: any) {
+      setStarError(
+        err?.response?.data?.error ||
+        'Failed to evaluate response. Make sure the LLM server is running.'
+      );
+    } finally {
+      setStarLoading(false);
+    }
   };
 
   return (
@@ -198,25 +259,51 @@ export const SpeakingPractice = () => {
               <p className="prompt-text">{prompt.text}</p>
             </div>
 
-            <div className="recording-indicator">
               {isRecording && (
                 <div className="recording-pulse">
                   <span className="pulse"></span>
                   Recording... {formatTime(recordingTime)}
                 </div>
               )}
-            </div>
+                if (transcriptionEnabled && capturedTranscript.trim().length > 0) {
+                  void evaluateTranscript(capturedTranscript);
+                } else if (!transcriptionEnabled) {
+                  setStarScores(null);
+                  setStarFeedback('');
+                  setStarError('Transcription was disabled for this session.');
+                }
+              };
 
-            <div className="transcript-card">
-              <div className="transcript-header">
-                <h3>Live Transcript</h3>
-                <span className={transcriptionSupported ? 'supported' : 'unsupported'}>
-                  {transcriptionSupported ? (isListening ? 'Listening' : 'Waiting') : 'Not supported'}
-                </span>
+              const finishSpeaking = () => {
+                const capturedTranscript = liveTranscript;
+                stopListening();
+                stopRecording();
+
+                const finalSpeakTime = speakTimer.time;
+                speakTimer.stop();
+                setSpeakDuration(finalSpeakTime);
+                setPhase('reviewing');
+
+                if (transcriptionEnabled && capturedTranscript.trim().length > 0) {
+                  void evaluateTranscript(capturedTranscript);
+                } else if (!transcriptionEnabled) {
+                  setStarScores(null);
+                  setStarFeedback('');
+                  setStarError('Transcription was disabled for this session.');
+                }
+                    className={`toggle-btn ${transcriptionEnabled ? 'enabled' : 'disabled'}`}
+                    title={transcriptionEnabled ? 'Disable transcription' : 'Enable transcription'}
+                  >
+                    {transcriptionEnabled ? '🎤 On' : '🎤 Off'}
+                  </button>
+                  <span className={transcriptionSupported ? 'supported' : 'unsupported'}>
+                    {transcriptionSupported ? (isListening ? 'Listening' : 'Waiting') : 'Not supported'}
+                  </span>
+                </div>
               </div>
               {transcriptionSupported ? (
                 <p className="transcript-text">
-                  {liveTranscript || 'Start speaking to see live transcription.'}
+                  {transcriptionEnabled ? (liveTranscript || 'Start speaking to see live transcription.') : 'Transcription is disabled. Click the toggle to enable.'}
                 </p>
               ) : (
                 <p className="transcript-text muted">
@@ -260,12 +347,82 @@ export const SpeakingPractice = () => {
             <div className="transcript-card">
               <div className="transcript-header">
                 <h3>Transcript</h3>
-                <span className="supported">Final</span>
+                <div className="transcript-controls">
+                  <span className="supported">Final</span>
+                </div>
               </div>
               <p className="transcript-text">
-                {liveTranscript || 'No transcript captured.'}
+                {transcriptionEnabled ? (liveTranscript || 'No transcript captured.') : 'Transcription was disabled for this session.'}
               </p>
             </div>
+
+            {transcriptionEnabled && (
+              <div className="star-scores-card">
+                <div className="star-header">
+                  <h3>STAR Evaluation</h3>
+                  {starLoading && <span className="loading">Evaluating...</span>}
+                </div>
+
+                {starLoading ? (
+                  <div className="star-loading">
+                    <div className="spinner"></div>
+                    <p>Analyzing your response using STAR format...</p>
+                  </div>
+                ) : starError ? (
+                  <div className="star-error">{starError}</div>
+                ) : starScores ? (
+                  <>
+                    <div className="star-scores-grid">
+                      <div className="star-score-item">
+                        <div className="score-label">Situation</div>
+                        <div className="score-value">{starScores.situation}/5</div>
+                        <div className="score-bar">
+                          <div
+                            className="score-fill"
+                            style={{ width: `${(starScores.situation / 5) * 100}%` }}
+                          ></div>
+                        </div>
+                      </div>
+                      <div className="star-score-item">
+                        <div className="score-label">Task</div>
+                        <div className="score-value">{starScores.task}/5</div>
+                        <div className="score-bar">
+                          <div
+                            className="score-fill"
+                            style={{ width: `${(starScores.task / 5) * 100}%` }}
+                          ></div>
+                        </div>
+                      </div>
+                      <div className="star-score-item">
+                        <div className="score-label">Action</div>
+                        <div className="score-value">{starScores.action}/5</div>
+                        <div className="score-bar">
+                          <div
+                            className="score-fill"
+                            style={{ width: `${(starScores.action / 5) * 100}%` }}
+                          ></div>
+                        </div>
+                      </div>
+                      <div className="star-score-item">
+                        <div className="score-label">Result</div>
+                        <div className="score-value">{starScores.result}/5</div>
+                        <div className="score-bar">
+                          <div
+                            className="score-fill"
+                            style={{ width: `${(starScores.result / 5) * 100}%` }}
+                          ></div>
+                        </div>
+                      </div>
+                    </div>
+                    {starFeedback && (
+                      <div className="star-feedback">
+                        <p>{starFeedback}</p>
+                      </div>
+                    )}
+                  </>
+                ) : null}
+              </div>
+            )}
 
             {recordedBlob && (
               <div className="playback-section">
