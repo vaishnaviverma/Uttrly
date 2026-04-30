@@ -3,7 +3,6 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const db = require('../db/init');
-const authMiddleware = require('../middleware/auth');
 const router = express.Router();
 
 // Configure multer for audio file uploads
@@ -20,7 +19,7 @@ const upload = multer({
 });
 
 // Create session with audio upload
-router.post('/', authMiddleware, upload.single('audio'), (req, res) => {
+router.post('/', upload.single('audio'), (req, res) => {
   try {
     const { promptId, promptText, thinkDuration, speakDuration } = req.body;
     const audioFileId = req.file ? req.file.filename : null;
@@ -30,7 +29,7 @@ router.post('/', authMiddleware, upload.single('audio'), (req, res) => {
       VALUES (?, ?, ?, ?, ?, ?)
     `);
 
-    const result = stmt.run(req.userId, promptId, promptText, thinkDuration, speakDuration, audioFileId);
+    const result = stmt.run(1, promptId, promptText, thinkDuration, speakDuration, audioFileId);
 
     res.json({
       sessionId: result.lastInsertRowid,
@@ -45,15 +44,14 @@ router.post('/', authMiddleware, upload.single('audio'), (req, res) => {
   }
 });
 
-// Get sessions for current user
-router.get('/', authMiddleware, (req, res) => {
+// Get all sessions
+router.get('/', (req, res) => {
   try {
     const sessions = db.prepare(`
       SELECT * FROM sessions
-      WHERE user_id = ?
       ORDER BY created_at DESC
-      LIMIT 50
-    `).all(req.userId);
+      LIMIT 100
+    `).all();
 
     res.json(sessions);
   } catch (err) {
@@ -62,12 +60,12 @@ router.get('/', authMiddleware, (req, res) => {
 });
 
 // Get single session
-router.get('/:sessionId', authMiddleware, (req, res) => {
+router.get('/:sessionId', (req, res) => {
   try {
     const session = db.prepare(`
       SELECT * FROM sessions
-      WHERE id = ? AND user_id = ?
-    `).get(req.params.sessionId, req.userId);
+      WHERE id = ?
+    `).get(req.params.sessionId);
 
     if (!session) {
       return res.status(404).json({ error: 'Session not found' });
@@ -80,9 +78,9 @@ router.get('/:sessionId', authMiddleware, (req, res) => {
 });
 
 // Delete session
-router.delete('/:sessionId', authMiddleware, (req, res) => {
+router.delete('/:sessionId', (req, res) => {
   try {
-    const session = db.prepare('SELECT * FROM sessions WHERE id = ? AND user_id = ?').get(req.params.sessionId, req.userId);
+    const session = db.prepare('SELECT * FROM sessions WHERE id = ?').get(req.params.sessionId);
 
     if (!session) {
       return res.status(404).json({ error: 'Session not found' });

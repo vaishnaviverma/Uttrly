@@ -20,11 +20,9 @@ if (!fs.existsSync(uploadsDir)) {
 }
 
 // Routes
-const authRoutes = require('./routes/auth');
 const promptRoutes = require('./routes/prompts');
 const sessionRoutes = require('./routes/sessions');
 
-app.use('/api/auth', authRoutes);
 app.use('/api/prompts', promptRoutes);
 app.use('/api/sessions', sessionRoutes);
 

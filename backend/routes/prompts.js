@@ -1,10 +1,9 @@
 const express = require('express');
 const db = require('../db/init');
-const authMiddleware = require('../middleware/auth');
 const router = express.Router();
 
 // Get random prompt
-router.get('/random', authMiddleware, (req, res) => {
+router.get('/random', (req, res) => {
   try {
     const prompt = db.prepare('SELECT * FROM prompts ORDER BY RANDOM() LIMIT 1').get();
     res.json(prompt);
@@ -14,7 +13,7 @@ router.get('/random', authMiddleware, (req, res) => {
 });
 
 // Get all prompts
-router.get('/', authMiddleware, (req, res) => {
+router.get('/', (req, res) => {
   try {
     const prompts = db.prepare('SELECT * FROM prompts').all();
     res.json(prompts);

@@ -1,16 +1,13 @@
-# Speaking Practice Tool - Uttrly
+# Uttrly - Daily Speaking Practice
 
-A web app to practice daily speaking with random prompts, thinking timers, speaking timers, audio recording, and session tracking.
+A minimal, distraction-free web app to practice speaking with random prompts and built-in timers. No sign-ups, no saving—just speak.
 
 ## Tech Stack
 
 - **Frontend**: React 18 + TypeScript + Vite
 - **Backend**: Node.js + Express
 - **Database**: SQLite (better-sqlite3)
-- **Authentication**: JWT
-- **Audio Recording**: Browser Web Audio API (MediaRecorder)
-- **File Upload**: Multer
-- **Password Hashing**: bcryptjs
+- **Audio Recording**: Browser Web Audio API (MediaRecorder) - for playback only
 
 ## Project Structure
 
@@ -22,31 +19,20 @@ A web app to practice daily speaking with random prompts, thinking timers, speak
 │   │   │   └── client.ts     # API client with axios
 │   │   ├── hooks/
 │   │   │   ├── useTimer.ts   # Custom hook for timers
-│   │   │   ├── useAudioRecorder.ts  # Custom hook for recording
-│   │   │   └── useLocalStorage.ts   # Local storage hook
 │   │   ├── pages/
-│   │   │   ├── Login.tsx     # Login page
-│   │   │   ├── Register.tsx  # Registration page
-│   │   │   └── SpeakingPractice.tsx # Main practice page
+│   │   │   └── SpeakingPractice.tsx # Main practice page (only page)
 │   │   ├── styles/
 │   │   │   └── SpeakingPractice.css
-│   │   ├── App.tsx           # Main app with routing
+│   │   ├── App.tsx           # Renders SpeakingPractice directly
 │   │   └── main.tsx
 │   ├── .env.development      # Dev API URL
-│   ├── .env.production       # Production API URL
 │   └── package.json
 │
 └── backend/                  # Express server
-    ├── src/
     ├── db/
-    │   └── init.js          # Database initialization and schema
-    ├── middleware/
-    │   └── auth.js          # JWT authentication middleware
+    │   └── init.js          # Database initialization with prompts
     ├── routes/
-    │   ├── auth.js          # Auth endpoints (register, login)
-    │   ├── prompts.js       # Prompts endpoints
-    │   └── sessions.js      # Sessions endpoints (CRUD + audio upload)
-    ├── uploads/             # Directory for audio files
+    │   └── prompts.js       # Prompts endpoint (no auth required)
     ├── server.js            # Main Express server
     ├── .env                 # Environment variables
     └── package.json
@@ -99,11 +85,11 @@ The app will be available at `http://localhost:5173` and supports hot module rep
 
 ## Usage
 
-### Registration & Login
+### Get Started
 1. Go to `http://localhost:5173`
-2. Click "Register here" to create a new account
-3. Enter username and password (password must be 6+ characters)
-4. After registration, you're automatically logged in
+2. No login needed—you're ready to practice immediately!
+3. Select your duration mode (1min, 2min, 3min, or 5min)
+4. Click "Get Random Prompt" to begin
 
 ### Speaking Practice Flow
 
@@ -113,7 +99,7 @@ The app will be available at `http://localhost:5173` and supports hot module rep
    - Press "Start Thinking" to begin thinking timer
    - Timer counts up showing your thinking time
    - Press "Pause" if needed
-   - Click "Ready to Speak →" when ready (both timers reset)
+   - Click "Ready to Speak →" when ready
 4. **Speaking Phase**:
    - App requests microphone access
    - Starts recording automatically
@@ -122,32 +108,16 @@ The app will be available at `http://localhost:5173` and supports hot module rep
 5. **Review Session**:
    - See total thinking and speaking durations
    - Play back your recording
-   - Press "Save Session" to upload recording and metadata to backend
-   - Recordings are stored on the server in `/uploads` folder
+   - Click "Start New Session" to practice again
+   - Nothing is saved—it's just for your practice!
 
 ## API Endpoints
 
-### Authentication
-- `POST /api/auth/register` - Register new user
-- `POST /api/auth/login` - Login user
-
 ### Prompts
-- `GET /api/prompts/random` - Get random prompt (requires auth)
-- `GET /api/prompts` - Get all prompts (requires auth)
-
-### Sessions
-- `POST /api/sessions` - Create session with audio upload (multipart/form-data)
-- `GET /api/sessions` - Get user's sessions (requires auth)
-- `GET /api/sessions/:id` - Get specific session (requires auth)
-- `DELETE /api/sessions/:id` - Delete session (requires auth)
+- `GET /api/prompts/random` - Get random prompt
+- `GET /api/prompts` - Get all prompts
 
 ## Database Schema
-
-### users
-- `id` - Primary key
-- `username` - Unique username
-- `password_hash` - Hashed password
-- `created_at` - Timestamp
 
 ### prompts
 - `id` - Primary key
@@ -155,49 +125,36 @@ The app will be available at `http://localhost:5173` and supports hot module rep
 - `category` - Category (personal, hypothetical, instructions, storytelling, persuasion, learning, opinion)
 - `created_at` - Timestamp
 
-### sessions
-- `id` - Primary key
-- `user_id` - Foreign key to users
-- `prompt_id` - Foreign key to prompts
-- `prompt_text` - Text of the prompt (denormalized for easy display)
-- `think_duration_seconds` - Time spent thinking
-- `speak_duration_seconds` - Time spent speaking
-- `audio_file_id` - Filename of recorded audio (WebM format)
-- `created_at` - Timestamp when session was saved
+20 prompts pre-seeded on first run across all categories.
 
 ## Features Implemented
 
-✅ User authentication with JWT
-✅ Random prompt generation from 20+ seeded prompts
+✅ Random prompt generation from 20 seeded prompts
 ✅ Dual timer system (thinking + speaking)
 ✅ Timer pause/resume functionality
 ✅ Audio recording with MediaRecorder API (WebM format)
 ✅ Audio playback with progress tracking
-✅ Session saving with metadata
+✅ Multiple duration modes (1min, 2min, 3min, 5min)
 ✅ Responsive design (mobile + desktop)
 ✅ Beautiful gradient UI with smooth animations
-✅ Error handling and user feedback
+✅ No setup, no login—just practice
 
-## Future Enhancements
+## Possible Future Enhancements
 
-- Session history dashboard with stats
+- Optional local session history (IndexedDB)
 - Daily streak counter
-- Ability to edit/create custom prompts
-- Speech-to-text transcript
+- Custom prompt lists
+- Speech-to-text transcript (Whisper API)
 - AI feedback on speech quality
-- Playback statistics (average duration, improvement tracking)
-- Export sessions as CSV
-- Cloud storage for audio files (AWS S3)
+- Speech analytics
 - Multi-language support
-- User profile and settings page
-- Public recording sharing (optional)
+- Timer presets customization
 
 ## Environment Variables
 
 ### Backend (.env)
 ```
 PORT=3001
-JWT_SECRET=dev-secret-key-change-in-production
 NODE_ENV=development
 ```
 
@@ -224,26 +181,26 @@ If port 3001 or 5173 is already in use:
 
 ### CORS Errors
 - Verify both servers are running
-- Check that `VITE_API_URL` in frontend .env matches backend port
+- Check that `VITE_API_URL` in frontend .env.development matches backend port
 - Backend has CORS enabled by default
 
-## Running in Production
+## Deployment
 
-1. Build frontend:
-```bash
-cd frontend
-npm run build
-```
+For production deployment:
 
-2. Serve built files from backend or separate hosting (Vercel, Netlify)
+1. **Frontend**: Deploy built files to Vercel, Netlify, or GitHub Pages
+   ```bash
+   cd frontend
+   npm run build
+   # Deploy the `dist` folder
+   ```
 
-3. Deploy backend to Railway, Render, or Heroku
+2. **Backend**: Deploy to Railway, Render, Fly.io, or similar
+   - Set `NODE_ENV=production` in `.env`
+   - Set `PORT` to the service's port (usually auto-assigned)
+   - Update frontend `VITE_API_URL` to point to production backend
 
-4. Update `.env.production` with production API URL
-
-5. Use a production database (Pgptgres, MySQL, or cloud SQLite)
-
-6. Set proper JWT_SECRET and use HTTPS
+3. **Use HTTPS** in production (automatic on most hosting platforms)
 
 ## License
 

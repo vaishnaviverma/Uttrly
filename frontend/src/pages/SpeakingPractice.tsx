@@ -1,5 +1,4 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState } from 'react';
 import { useTimer } from '../hooks/useTimer';
 import { useAudioRecorder } from '../hooks/useAudioRecorder';
 import { promptAPI, sessionAPI } from '../api/client';
@@ -14,7 +13,6 @@ interface Prompt {
 }
 
 export const SpeakingPractice = () => {
-  const navigate = useNavigate();
   const [phase, setPhase] = useState<PracticePhase>('idle');
   const [prompt, setPrompt] = useState<Prompt | null>(null);
   const [thinkDuration, setThinkDuration] = useState(0);
@@ -102,45 +100,6 @@ export const SpeakingPractice = () => {
     setPhase('reviewing');
   };
 
-  const submitSession = async () => {
-    if (!prompt || !recordedBlob) {
-      setError('No recording to submit');
-      return;
-    }
-
-    setLoading(true);
-    setError('');
-
-    try {
-      const formData = new FormData();
-      formData.append('audio', recordedBlob, 'recording.webm');
-      formData.append('promptId', String(prompt.id));
-      formData.append('promptText', prompt.text);
-      formData.append('thinkDuration', String(thinkDuration));
-      formData.append('speakDuration', String(speakDuration));
-
-      await sessionAPI.createSession(formData);
-      setSuccessMessage('Session saved successfully! 🎉');
-      
-      // Reset for next session
-      setTimeout(() => {
-        setPhase('idle');
-        setPrompt(null);
-        setSuccessMessage('');
-      }, 2000);
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to save session');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const logout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('userId');
-    navigate('/login');
-  };
-
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -150,8 +109,7 @@ export const SpeakingPractice = () => {
   return (
     <div className="speaking-practice">
       <header className="header">
-        <h1>🎤 Speaking Practice</h1>
-        <button onClick={logout} className="logout-btn">Logout</button>
+        <h1>🎤 Uttrly</h1>
       </header>
 
       <div className="container">
@@ -299,13 +257,6 @@ export const SpeakingPractice = () => {
             )}
 
             <div className="action-buttons">
-              <button
-                onClick={submitSession}
-                disabled={loading}
-                className="success-btn"
-              >
-                {loading ? 'Saving...' : 'Save Session'}
-              </button>
               <button
                 onClick={() => {
                   setPhase('idle');
