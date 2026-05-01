@@ -265,7 +265,7 @@ For production deployment:
    - Set `PORT` to the service's port (usually auto-assigned)
    - Update frontend `VITE_API_URL` to point to production backend
 
-3. **Use HTTPS** in production (automatic on most hosting platforms)
+3. **Use HTTPS** in production (automatic on most hosting platforms).
 
 ## License
 
